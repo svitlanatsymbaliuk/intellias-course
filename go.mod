@@ -1,3 +1,3 @@
-module example.com/basics-practice // rename module
+module github.com/svitlanatsymbaliuk/intellias-course
 
 go 1.24.0

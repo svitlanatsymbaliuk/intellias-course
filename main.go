@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"example.com/basics-practice/internal"
+	"github.com/svitlanatsymbaliuk/intellias-course/internal"
 )
 
 func main() {
