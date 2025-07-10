@@ -1,0 +1,14 @@
+-- +goose Up
+CREATE TABLE records (
+    id SERIAL PRIMARY KEY,
+    guid VARCHAR(255) NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    link TEXT NOT NULL,
+    description TEXT,
+    pub_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- +goose Down
+DROP TABLE IF EXISTS articles; 

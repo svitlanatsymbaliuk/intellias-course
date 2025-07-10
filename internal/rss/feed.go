@@ -1,4 +1,4 @@
-package internal // Should the name be internal?
+package rss
 
 import (
 	"encoding/xml"
@@ -31,7 +31,7 @@ func GetRSSFeeds(url string) (*RSS, error) {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return nil, errors.New("Status code isn't OK")
+		return nil, errors.New("status code isn't OK")
 	}
 
 	body, err := io.ReadAll(response.Body)
