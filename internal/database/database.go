@@ -59,17 +59,47 @@ func GetAllRSSItems(db *sql.DB) ([]rss.Item, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	defer rows.Close()
 
+	itemsChan := make(chan rss.Item, 100)
+	errChan := make(chan error, 1)
+
+	const numWorkers = 5
+	for i := 0; i < numWorkers; i++ {
+		go fetchRows(rows, itemsChan, errChan)
+	}
+
 	var items []rss.Item
-	for rows.Next() {
-		var item rss.Item
-		if err := rows.Scan(&item.Title, &item.Link, &item.Description); err != nil {
-			return nil, err
+	doneWorkers := 0
+	for doneWorkers < numWorkers {
+		select {
+		case item := <-itemsChan:
+			items = append(items, item)
+		case err := <-errChan:
+			if err != nil {
+				return nil, err
+			}
+			doneWorkers++
 		}
-		items = append(items, item)
 	}
 
 	return items, nil
+}
+
+// fetchRows reads rows from the *sql.Rows and sends rss.Item objects to itemsChan.
+// It signals completion by sending nil to errChan.
+func fetchRows(rows *sql.Rows, itemsChan chan<- rss.Item, errChan chan<- error) {
+	for rows.Next() {
+		var item rss.Item
+		if err := rows.Scan(&item.Title, &item.Link, &item.Description); err != nil {
+			errChan <- err
+			return
+		}
+		itemsChan <- item
+	}
+	if err := rows.Err(); err != nil {
+		errChan <- err
+		return
+	}
+	errChan <- nil
 }

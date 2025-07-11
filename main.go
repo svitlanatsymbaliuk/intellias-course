@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"github.com/labstack/echo/v4"
 	_ "github.com/lib/pq"
 	"github.com/svitlanatsymbaliuk/intellias-course/internal/config"
 	"github.com/svitlanatsymbaliuk/intellias-course/internal/database"
 	"github.com/svitlanatsymbaliuk/intellias-course/internal/migrations"
 	"github.com/svitlanatsymbaliuk/intellias-course/internal/rss"
+	"github.com/svitlanatsymbaliuk/intellias-course/internal/server"
 )
 
 func main() {
@@ -46,16 +50,24 @@ func main() {
 
 	defer db.Close()
 
-	// Add REST API with Echo
-	e := echo.New()
-	e.GET("/rss", func(context echo.Context) error {
-		items, err := database.GetAllRSSItems(db)
-		if err != nil {
-			return context.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to fetch items"})
-		}
-		return context.JSON(http.StatusOK, items)
-	})
+	e := server.New()
+	server.Get(e, db, "/rss")
 
 	fmt.Println("REST API running on :8080")
-	e.Logger.Fatal(e.Start(":8080"))
+	if err := e.Start(":8080"); err != nil {
+		e.Logger.Info("Shutting down the server")
+	}
+
+	// Graceful shutdown setup
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	<-quit
+	fmt.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := e.Shutdown(ctx); err != nil {
+		e.Logger.Fatal("Server forced to shutdown: ", err)
+	}
 }
