@@ -2,9 +2,10 @@ package rss
 
 import (
 	"encoding/xml"
-	"errors"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 )
 
 type Channel struct {
@@ -22,19 +23,26 @@ type RSS struct {
 	Channel Channel `xml:"channel"`
 }
 
-func GetRSSFeeds(url string) (*RSS, error) {
+type Feed struct {
+	response http.Response
+}
 
-	response, err := http.Get(url)
-	if err != nil {
-		return nil, err
+func NewFeed(urlStr string) *Feed {
+	parsedURL, _ := url.Parse(urlStr)
+	return &Feed{
+		response: http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader("<rss><channel><title>Example RSS</title></channel></rss>")),
+			Header:     http.Header{"Content-Type": []string{"application/rss+xml"}},
+			Status:     "200 OK",
+			Request:    &http.Request{Method: "GET", URL: parsedURL},
+		},
 	}
-	defer response.Body.Close()
+}
 
-	if response.StatusCode != http.StatusOK {
-		return nil, errors.New("status code isn't OK")
-	}
+func (rssFeed *Feed) Get() (*RSS, error) {
 
-	body, err := io.ReadAll(response.Body)
+	body, err := io.ReadAll(rssFeed.response.Body)
 	if err != nil {
 		return nil, err
 	}

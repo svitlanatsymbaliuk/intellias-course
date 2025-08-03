@@ -2,23 +2,57 @@ package database
 
 import (
 	"database/sql"
+	"embed"
 	"fmt"
 
 	_ "github.com/lib/pq"
+	"github.com/pressly/goose/v3"
 	"github.com/svitlanatsymbaliuk/intellias-course/internal/rss"
 )
 
-func Connect(connectionData string) (*sql.DB, error) {
+//go:embed *.sql
+var embedMigrations embed.FS
 
-	db, err := sql.Open("postgres", connectionData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-
-	return db, nil
+type Database struct {
+	connect *sql.DB
 }
 
-func InitializeDatabase(db *sql.DB) error {
+func NewDatabase(connectData string) *Database {
+	db, err := sql.Open("postgres", connectData)
+	if err != nil {
+		return nil
+	}
+	return &Database{connect: db}
+}
+
+func (db *Database) Close() {
+	if db.connect != nil {
+		db.connect.Close()
+	}
+}
+
+func (db *Database) GetConnection() *sql.DB {
+	return db.connect
+}
+
+func (db *Database) Migration() error {
+	goose.SetBaseFS(embedMigrations)
+
+	err := goose.SetDialect("postgres")
+	if err != nil {
+		return fmt.Errorf("failed to set dialect: %w", err)
+	}
+
+	// Use "." because goose will look for migrations in the embedded FS root
+	err = goose.Up(db.connect, ".")
+	if err != nil {
+		return fmt.Errorf("failed to apply migrations: %w", err)
+	}
+
+	return nil
+}
+
+func (db *Database) Initialize() error {
 
 	// Create table if not exists
 	createTableQuery := `
@@ -29,7 +63,7 @@ func InitializeDatabase(db *sql.DB) error {
 		description TEXT NOT NULL
 	);`
 
-	_, err := db.Exec(createTableQuery)
+	_, err := db.connect.Exec(createTableQuery)
 	if err != nil {
 		return fmt.Errorf("error creating table: %w", err)
 	}
@@ -37,12 +71,12 @@ func InitializeDatabase(db *sql.DB) error {
 	return nil
 }
 
-func InsertRSSItem(db *sql.DB, items []rss.Item) error {
+func (db *Database) InsertRSSItem(items []rss.Item) error {
 
 	insertQuery := `INSERT INTO rss_items (title, link, description) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING;`
 
 	for _, item := range items {
-		_, err := db.Exec(insertQuery, item.Title, item.Link, item.Description)
+		_, err := db.connect.Exec(insertQuery, item.Title, item.Link, item.Description)
 		if err != nil {
 			return fmt.Errorf("error inserting item '%s': %v", item.Title, err)
 		}
@@ -53,9 +87,9 @@ func InsertRSSItem(db *sql.DB, items []rss.Item) error {
 	return nil
 }
 
-func GetAllRSSItems(db *sql.DB) ([]rss.Item, error) {
+func (db *Database) GetAllRSSItems() ([]rss.Item, error) {
 
-	rows, err := db.Query("SELECT title, link, description FROM rss_items")
+	rows, err := db.connect.Query("SELECT title, link, description FROM rss_items")
 	if err != nil {
 		return nil, err
 	}
